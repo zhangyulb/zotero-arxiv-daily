@@ -2,6 +2,7 @@ import arxiv
 import argparse
 import os
 import sys
+import time
 from dotenv import load_dotenv
 load_dotenv(override=True)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -60,6 +61,7 @@ def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
             batch = [ArxivPaper(p) for p in client.results(search)]
             bar.update(len(batch))
             papers.extend(batch)
+            time.sleep(3)
         bar.close()
 
     else:
