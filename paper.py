@@ -157,7 +157,7 @@ class ArxivPaper:
         if self.tex is not None:
             content = self.tex.get("all")
             if content is None:
-                content = "\n".join(self.tex.values())
+                content = "\n".join([v for v in self.tex.values() if v is not None])
             #remove cite
             content = re.sub(r'~?\\cite.?\{.*?\}', '', content)
             #remove figure
@@ -208,7 +208,7 @@ class ArxivPaper:
         if self.tex is not None:
             content = self.tex.get("all")
             if content is None:
-                content = "\n".join(self.tex.values())
+                content = "\n".join([v for v in self.tex.values() if v is not None])
             #search for affiliations
             possible_regions = [r'\\author.*?\\maketitle',r'\\begin{document}.*?\\begin{abstract}']
             matches = [re.search(p, content, flags=re.DOTALL) for p in possible_regions]
