@@ -17,6 +17,9 @@ jobs:
         with:
           version: '0.5.4'
 
+      - name: Install dependencies
+        run: uv pip sync
+
       - name: Run script
         env:
           ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
