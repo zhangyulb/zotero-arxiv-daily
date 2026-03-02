@@ -18,7 +18,7 @@ jobs:
           version: '0.5.4'
 
       - name: Install dependencies
-        run: uv pip sync
+        run: uv pip sync pyproject.toml
 
       - name: Run script
         env:
