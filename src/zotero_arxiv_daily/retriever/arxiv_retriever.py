@@ -109,12 +109,19 @@ def _extract_text_from_tar_worker(source_url: str, paper_id: str, paper_title: s
 class ArxivRetriever(BaseRetriever):
     def __init__(self, config):
         super().__init__(config)
-        if self.config.source.arxiv.category is None:
+        import os
+        self.arxiv_query = os.environ.get("ARXIV_QUERY")
+        if self.config.source.arxiv.category is None and not self.arxiv_query:
             raise ValueError("category must be specified for arxiv.")
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
-        query = '+'.join(self.config.source.arxiv.category)
+        
+        if self.config.source.arxiv.category:
+            query = '+'.join(self.config.source.arxiv.category)
+        else:
+            query = self.arxiv_query
+            
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
         # Get the latest paper from arxiv rss feed
         feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
@@ -132,11 +139,13 @@ class ArxivRetriever(BaseRetriever):
 
         # Get full information of each paper from arxiv api
         bar = tqdm(total=len(all_paper_ids))
+        import time
         for i in range(0, len(all_paper_ids), 20):
             search = arxiv.Search(id_list=all_paper_ids[i:i + 20])
             batch = list(client.results(search))
             bar.update(len(batch))
             raw_papers.extend(batch)
+            time.sleep(3)
         bar.close()
 
         return raw_papers
@@ -185,7 +194,11 @@ def extract_text_from_pdf(paper: ArxivResult) -> str | None:
 
 
 def extract_text_from_tar(paper: ArxivResult) -> str | None:
-    source_url = paper.source_url()
+    try:
+        source_url = paper.source_url()
+    except Exception as exc:
+        logger.warning(f"Failed to get source URL for {paper.title}: {exc}")
+        return None
     if source_url is None:
         logger.warning(f"No source URL available for {paper.title}")
         return None
