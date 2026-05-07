@@ -1,6 +1,6 @@
 zotero:
-  user_id: ??? # User ID of your Zotero account.
-  api_key: ??? # An Zotero API key with read access.
+  user_id: ${oc.env:ZOTERO_ID,null} # User ID of your Zotero account.
+  api_key: ${oc.env:ZOTERO_KEY,null} # An Zotero API key with read access.
   include_path: null # A list of glob patterns marking the Zotero collections that should be included. Example: ["2026/survey/**","2026/reading-group/**"]
   ignore_path: null # A list of glob patterns marking the Zotero collections that should be excluded. Example: ["2026/ignore/**","archive/**"]
 
@@ -18,21 +18,21 @@ source:
     category: null # The categories of target medrxiv papers. Find categories from [here](https://www.medrxiv.org/) Example: ["psychiatry and clinical psychology", "neurology"]
 
 email:
-  sender: ??? # The email account of the SMTP server that sends you email. Example: abc@qq.com
-  receiver: ??? # The email account that receives the paper list. Example: abc@outlook.com
-  smtp_server: ??? # The SMTP server that sends the email. Ask your email provider (Gmail, QQ, Outlook, ...) for its SMTP server. Example: smtp.qq.com
-  smtp_port: ??? # The port of SMTP server. Example: 465
-  sender_password: ??? # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
+  sender: ${oc.env:SENDER,null} # The email account of the SMTP server that sends you email. Example: abc@qq.com
+  receiver: ${oc.env:RECEIVER,null} # The email account that receives the paper list. Example: abc@outlook.com
+  smtp_server: ${oc.env:SMTP_SERVER,smtp.qq.com} # The SMTP server that sends the email. Ask your email provider (Gmail, QQ, Outlook, ...) for its SMTP server. Example: smtp.qq.com
+  smtp_port: ${oc.env:SMTP_PORT,465} # The port of SMTP server. Example: 465
+  sender_password: ${oc.env:SENDER_PASSWORD,null} # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
 
 llm:
   api:
-    key: ??? # API Key of your LLM API. Example: sk-xxx
-    base_url: ??? # API URL of your LLM API. Example: https://api.openai.com/v1
+    key: ${oc.env:OPENAI_API_KEY,null} # API Key of your LLM API. Example: sk-xxx
+    base_url: ${oc.env:OPENAI_API_BASE,'https://api.openai.com/v1'} # API URL of your LLM API. Example: https://api.openai.com/v1
   generation_kwargs:
   # Arguments for the LLM API. See [here](https://platform.openai.com/docs/api-reference/chat/create) for more details.
     max_tokens: 16384
-    model: ???
-  language: English # Preferred language for the TL;DR. Example: English
+    model: ${oc.env:MODEL_NAME,gpt-4o-mini}
+  language: ${oc.env:LANGUAGE,English} # Preferred language for the TL;DR. Example: English
 
 reranker:
   local:

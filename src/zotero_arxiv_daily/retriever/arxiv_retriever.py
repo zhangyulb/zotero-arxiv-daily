@@ -112,7 +112,6 @@ class ArxivRetriever(BaseRetriever):
         import os
         self.arxiv_query = os.environ.get("ARXIV_QUERY")
         if not self.config.source.arxiv.category and not self.arxiv_query:
-            # Fallback to standard CS defaults if both are missing/null
             self.config.source.arxiv.category = ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
