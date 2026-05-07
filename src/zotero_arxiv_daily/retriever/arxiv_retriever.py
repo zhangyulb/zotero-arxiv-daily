@@ -111,8 +111,9 @@ class ArxivRetriever(BaseRetriever):
         super().__init__(config)
         import os
         self.arxiv_query = os.environ.get("ARXIV_QUERY")
-        if self.config.source.arxiv.category is None and not self.arxiv_query:
-            raise ValueError("category must be specified for arxiv.")
+        if not self.config.source.arxiv.category and not self.arxiv_query:
+            # Fallback to standard CS defaults if both are missing/null
+            self.config.source.arxiv.category = ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
