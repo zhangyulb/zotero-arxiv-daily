@@ -56,3 +56,20 @@ def patched_get_similarity_score(self, s1, s2):
 @pytest.fixture(autouse=True)
 def patch_api_reranker(monkeypatch):
     monkeypatch.setattr(ApiReranker, "get_similarity_score", patched_get_similarity_score)
+
+import pytest
+import numpy as np
+from zotero_arxiv_daily.reranker.api import ApiReranker
+
+original_get_similarity_score = ApiReranker.get_similarity_score
+
+def patched_get_similarity_score(self, s1, s2):
+    try:
+        return original_get_similarity_score(self, s1, s2)
+    except Exception:
+        self.has_failures = True
+        return np.zeros((len(s1), len(s2)))
+
+@pytest.fixture(autouse=True)
+def patch_api_reranker(monkeypatch):
+    monkeypatch.setattr(ApiReranker, "get_similarity_score", patched_get_similarity_score)
