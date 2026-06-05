@@ -122,3 +122,28 @@ def test_affiliations_error_returns_none(llm_params):
     result = paper.generate_affiliations(broken_client, llm_params)
     assert result is None
     assert paper.affiliations is None
+
+def test_paper_tldr_failure_degrades_gracefully(monkeypatch):
+    from zotero_arxiv_daily.protocol import Paper
+    from openai import OpenAI
+    
+    paper = Paper(
+        source="arxiv",
+        title="Test Paper",
+        authors=["Author"],
+        abstract="Test abstract",
+        url="http://test",
+    )
+    
+    def _patched_create(*args, **kwargs):
+        raise Exception("API down")
+        
+    client = OpenAI(api_key="test")
+    import time
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    monkeypatch.setattr(client.chat.completions, "create", _patched_create)
+    
+    tldr = paper.generate_tldr(client, {})
+    
+    assert tldr == "Test abstract"
+    assert paper.has_failures is True
