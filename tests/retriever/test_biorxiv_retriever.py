@@ -56,3 +56,25 @@ def test_biorxiv_requires_category(config):
         config.source.biorxiv = {"category": None}
     with pytest.raises(ValueError, match="category must be specified"):
         BiorxivRetriever(config)
+
+def test_biorxiv_api_failure_degrades_gracefully(config, monkeypatch):
+    import requests
+    from zotero_arxiv_daily.retriever.biorxiv_retriever import BiorxivRetriever
+    from omegaconf import open_dict
+    
+    def _patched_get(*args, **kwargs):
+        raise requests.exceptions.RequestException("API down")
+        
+    import time
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    monkeypatch.setattr(requests, "get", _patched_get)
+    monkeypatch.setattr("zotero_arxiv_daily.retriever.base.sleep", lambda _: None)
+    
+    with open_dict(config.source):
+        config.source.biorxiv = {"category": ["bioinformatics"]}
+        
+    retriever = BiorxivRetriever(config)
+    papers = retriever._retrieve_raw_papers()
+    
+    assert papers == []
+    assert retriever.has_failures is True

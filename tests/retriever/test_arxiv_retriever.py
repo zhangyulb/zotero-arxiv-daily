@@ -88,3 +88,20 @@ def test_run_with_hard_timeout_returns_none_on_failure(monkeypatch):
     )
     assert result is None
     assert "boom" in warnings[0]
+
+def test_arxiv_feed_failure_degrades_gracefully(config, monkeypatch):
+    from zotero_arxiv_daily.retriever.arxiv_retriever import ArxivRetriever
+    import feedparser
+    
+    def _patched_parse(*args, **kwargs):
+        raise Exception("Feed down")
+        
+    import time
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    monkeypatch.setattr(feedparser, "parse", _patched_parse)
+    
+    retriever = ArxivRetriever(config)
+    papers = retriever._retrieve_raw_papers()
+    
+    assert papers == []
+    assert retriever.has_failures is True
