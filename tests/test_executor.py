@@ -295,10 +295,25 @@ def test_run_returns_has_failures_flag(config, monkeypatch):
     
     def mock_retrieve(self):
         self.has_failures = True
-        return []
+        from tests.canned_responses import make_sample_paper
+        return [make_sample_paper(title="E2E Paper 1", score=None)]
         
     monkeypatch.setattr(registered_retrievers["arxiv"], "retrieve_papers", mock_retrieve)
     
+    # We must patch render_email and send_email to not crash since we're producing a fake paper
+    monkeypatch.setattr("zotero_arxiv_daily.executor.render_email", lambda *a, **kw: "dummy email")
+    monkeypatch.setattr("zotero_arxiv_daily.executor.send_email", lambda *a, **kw: None)
+
+    # We must patch get_similarity_score on api reranker since it makes LLM calls
+    from zotero_arxiv_daily.reranker.api import ApiReranker
+    import numpy as np
+    monkeypatch.setattr(ApiReranker, "get_similarity_score", lambda *a, **kw: np.zeros((1,1)))
+    
+    # Patch OpenAI client for generate_tldr
+    from tests.canned_responses import make_stub_openai_client
+    stub_client = make_stub_openai_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", lambda **kw: stub_client)
+
     executor = Executor(config)
     has_failures = executor.run()
     assert has_failures is True
