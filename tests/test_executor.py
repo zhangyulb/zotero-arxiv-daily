@@ -281,3 +281,24 @@ def test_run_no_papers_send_empty_true(config, monkeypatch):
     assert len(sent) == 1, "Email should be sent even with no papers when send_empty=true"
     _, _, body = sent[0]
     assert "text/html" in body
+
+
+def test_run_returns_has_failures_flag(config, monkeypatch):
+    from zotero_arxiv_daily.executor import Executor
+    from tests.canned_responses import make_stub_zotero_client
+    from zotero_arxiv_daily.retriever.base import registered_retrievers
+    
+    stub_zot = make_stub_zotero_client()
+    import time
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    
+    def mock_retrieve(self):
+        self.has_failures = True
+        return []
+        
+    monkeypatch.setattr(registered_retrievers["arxiv"], "retrieve_papers", mock_retrieve)
+    
+    executor = Executor(config)
+    has_failures = executor.run()
+    assert has_failures is True
