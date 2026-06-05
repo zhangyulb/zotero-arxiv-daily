@@ -39,6 +39,7 @@ class BiorxivRetriever(BaseRetriever):
                 raw_papers = raw_papers[:10]
         except Exception as e:
             logger.error(f"Failed to retrieve papers: {str(e)}")
+            self.has_failures = True
             
         return raw_papers
 
