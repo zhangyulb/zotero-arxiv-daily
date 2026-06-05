@@ -3,7 +3,7 @@ from .base import BaseRetriever, register_retriever
 from ..protocol import Paper
 from loguru import logger
 from typing import Any
-from time import sleep
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 @register_retriever("biorxiv")
 class BiorxivRetriever(BaseRetriever):
@@ -14,34 +14,33 @@ class BiorxivRetriever(BaseRetriever):
         if self.retriever_config.category is None:
             raise ValueError(f"category must be specified for {self.name}")
 
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(10), reraise=True)
+    def _fetch_api_page(self, api_url: str) -> requests.Response:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        return response
+
     def _retrieve_raw_papers(self) -> list[dict[str, Any]]:
         api_url = f"https://api.biorxiv.org/details/{self.server}/2d"
-        retry_num = 10
-        delay_time = 10
-        for i in range(retry_num):
-            try:
-                response = requests.get(api_url)
-                response.raise_for_status()
-                break
-            except Exception as e:
-                if i == retry_num - 1:
-                    raise e
-                else:
-                    logger.warning(f"Failed to retrieve papers: {str(e)}. Retry in {delay_time} seconds.")
-                    sleep(delay_time)
-        result = response.json()
-        collection = result['collection']
-        if len(collection) == 0:
-            logger.warning(f"No paper found. API Message: {result['messages']}")
-            return []
-        all_dates = set(c['date'] for c in collection)
-        latest_date = sorted(all_dates)[-1]
-        collection = [c for c in collection if c['date'] == latest_date]
-        categories = [c.lower() for c in self.retriever_config.category]
-        collection = [c for c in collection if c['category'] in categories]
-        if self.config.executor.debug:
-            collection = collection[:10]
-        return collection
+        raw_papers = []
+        try:
+            response = self._fetch_api_page(api_url)
+            result = response.json()
+            collection = result.get('collection', [])
+            if len(collection) == 0:
+                logger.warning(f"No paper found. API Message: {result.get('messages')}")
+                return raw_papers
+            all_dates = set(c['date'] for c in collection)
+            latest_date = sorted(all_dates)[-1]
+            collection = [c for c in collection if c['date'] == latest_date]
+            categories = [c.lower() for c in self.retriever_config.category]
+            raw_papers = [c for c in collection if c['category'] in categories]
+            if self.config.executor.debug:
+                raw_papers = raw_papers[:10]
+        except Exception as e:
+            logger.error(f"Failed to retrieve papers: {str(e)}")
+            
+        return raw_papers
 
 
     def convert_to_paper(self, raw_paper:dict[str, Any]) -> Paper | None:

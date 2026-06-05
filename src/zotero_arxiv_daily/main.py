@@ -29,7 +29,9 @@ def main(config:DictConfig):
         logger.info("Debug mode is enabled")
     
     executor = Executor(config)
-    executor.run()
+    has_failures = executor.run()
+    if has_failures and len(executor.papers) == 0:
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

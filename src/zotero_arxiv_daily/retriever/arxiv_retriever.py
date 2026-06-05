@@ -115,7 +115,7 @@ class ArxivRetriever(BaseRetriever):
             self.config.source.arxiv.category = ["cs.AI", "cs.CV", "cs.LG", "cs.CL"]
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
-        client = arxiv.Client(num_retries=10, delay_seconds=10)
+        client = arxiv.Client(num_retries=0)
         
         if self.config.source.arxiv.category:
             query = '+'.join(self.config.source.arxiv.category)

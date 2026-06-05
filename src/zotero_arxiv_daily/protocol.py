@@ -1,3 +1,4 @@
+from tenacity import retry, wait_exponential, stop_after_attempt
 from dataclasses import dataclass
 from typing import Optional, TypeVar
 from datetime import datetime
@@ -20,7 +21,9 @@ class Paper:
     tldr: Optional[str] = None
     affiliations: Optional[list[str]] = None
     score: Optional[float] = None
+    has_failures: bool = False
 
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=30), stop=stop_after_attempt(3), reraise=True)
     def _generate_tldr_with_llm(self, openai_client:OpenAI,llm_params:dict) -> str:
         lang = llm_params.get('language', 'English')
         prompt = f"Given the following information of a paper, generate a one-sentence TLDR summary in {lang}:\n\n"
@@ -63,10 +66,12 @@ class Paper:
             return tldr
         except Exception as e:
             logger.warning(f"Failed to generate tldr of {self.url}: {e}")
+            self.has_failures = True
             tldr = self.abstract
             self.tldr = tldr
             return tldr
 
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=30), stop=stop_after_attempt(3), reraise=True)
     def _generate_affiliations_with_llm(self, openai_client:OpenAI,llm_params:dict) -> Optional[list[str]]:
         if self.full_text is not None:
             prompt = f"Given the beginning of a paper, extract the affiliations of the authors in a python list format, which is sorted by the author order. If there is no affiliation found, return an empty list '[]':\n\n{self.full_text}"
@@ -101,6 +106,7 @@ class Paper:
             return affiliations
         except Exception as e:
             logger.warning(f"Failed to generate affiliations of {self.url}: {e}")
+            self.has_failures = True
             self.affiliations = None
             return None
 @dataclass

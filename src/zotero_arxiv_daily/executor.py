@@ -91,34 +91,70 @@ class Executor:
 
     
     def run(self):
+        has_failures = False
+        self.papers = []
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
         if len(corpus) == 0:
             logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
-            return
+            return True
         all_papers = []
         for source, retriever in self.retrievers.items():
             logger.info(f"Retrieving {source} papers...")
-            papers = retriever.retrieve_papers()
-            if len(papers) == 0:
-                logger.info(f"No {source} papers found")
-                continue
-            logger.info(f"Retrieved {len(papers)} {source} papers")
-            all_papers.extend(papers)
+            try:
+                papers = retriever.retrieve_papers()
+                if len(papers) == 0:
+                    logger.info(f"No {source} papers found")
+                    continue
+                logger.info(f"Retrieved {len(papers)} {source} papers")
+                all_papers.extend(papers)
+                if hasattr(retriever, 'has_failures') and retriever.has_failures:
+                    has_failures = True
+            except Exception as e:
+                logger.error(f"Retriever {source} failed completely: {e}")
+                has_failures = True
         logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
+        self.papers = all_papers
         reranked_papers = []
         if len(all_papers) > 0:
             logger.info("Reranking papers...")
-            reranked_papers = self.reranker.rerank(all_papers, corpus)
+            try:
+                reranked_papers = self.reranker.rerank(all_papers, corpus)
+                if hasattr(self.reranker, 'has_failures') and self.reranker.has_failures:
+                    has_failures = True
+            except Exception as e:
+                logger.error(f"Reranker failed completely: {e}")
+                has_failures = True
+                reranked_papers = []
+            
             reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
             logger.info("Generating TLDR and affiliations...")
             for p in tqdm(reranked_papers):
-                p.generate_tldr(self.openai_client, self.config.llm)
-                p.generate_affiliations(self.openai_client, self.config.llm)
+                try:
+                    p.generate_tldr(self.openai_client, self.config.llm)
+                    if getattr(p, 'has_failures', False):
+                        has_failures = True
+                except Exception as e:
+                    logger.error(f"Failed to generate TLDR for {p.title}: {e}")
+                    has_failures = True
+                try:
+                    p.generate_affiliations(self.openai_client, self.config.llm)
+                    if getattr(p, 'has_failures', False):
+                        has_failures = True
+                except Exception as e:
+                    logger.error(f"Failed to generate affiliations for {p.title}: {e}")
+                    has_failures = True
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
-            return
-        logger.info("Sending email...")
-        email_content = render_email(reranked_papers)
-        send_email(self.config, email_content)
-        logger.info("Email sent successfully")
+            return has_failures
+        
+        try:
+            logger.info("Sending email...")
+            email_content = render_email(reranked_papers)
+            send_email(self.config, email_content)
+            logger.info("Email sent successfully")
+        except Exception as e:
+            logger.error(f"Failed to send email: {e}")
+            has_failures = True
+            
+        return has_failures

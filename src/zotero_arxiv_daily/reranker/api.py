@@ -1,8 +1,18 @@
 from .base import BaseReranker, register_reranker
 from openai import OpenAI
+from tenacity import retry, wait_exponential, stop_after_attempt
 import numpy as np
 @register_reranker("api")
 class ApiReranker(BaseReranker):
+
+    @retry(wait=wait_exponential(multiplier=1, min=4, max=30), stop=stop_after_attempt(3), reraise=True)
+    def _fetch_embeddings_batch(self, client, texts_batch: list[str]) -> list[list[float]]:
+        response = client.embeddings.create(
+            input=texts_batch,
+            model=self.config.reranker.api.model
+        )
+        return [res.embedding for res in response.data]
+
     def get_similarity_score(self, s1: list[str], s2: list[str]) -> np.ndarray:
         client = OpenAI(api_key=self.config.reranker.api.key, base_url=self.config.reranker.api.base_url)
         batch_size = self.config.reranker.api.get("batch_size") or 64

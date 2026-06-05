@@ -4,6 +4,7 @@ from ..protocol import Paper, CorpusPaper
 import numpy as np
 from typing import Type
 class BaseReranker(ABC):
+    has_failures: bool = False
     def __init__(self, config:DictConfig):
         self.config = config
 

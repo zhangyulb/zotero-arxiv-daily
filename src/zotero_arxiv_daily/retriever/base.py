@@ -9,6 +9,7 @@ from loguru import logger
 
 class BaseRetriever(ABC):
     name: str
+    has_failures: bool = False
     def __init__(self, config:DictConfig):
         self.config = config
         self.retriever_config = getattr(config.source,self.name)
