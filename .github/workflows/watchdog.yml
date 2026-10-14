@@ -1,0 +1,66 @@
+name: Schedule watchdog
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs 2h after the daily cron (0 22 * * *). If the day's run is missing
+    # (GitHub silently disables scheduled workflows on inactive forks),
+    # this fails loudly and emails the receiver.
+    - cron: '0 0 * * *'
+
+jobs:
+  check-daily-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check today's run exists and succeeded
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SENDER: ${{ secrets.SENDER }}
+          RECEIVER: ${{ secrets.RECEIVER }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/actions/workflows/main.yml/runs?per_page=10",
+              headers={
+                  "Authorization": f"token {os.environ['GH_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+              },
+          )
+          with urllib.request.urlopen(req) as resp:
+              runs = json.load(resp)["workflow_runs"]
+
+          import datetime
+          today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+          todays = [r for r in runs if r["created_at"].startswith(today)]
+
+          problem = None
+          if not todays:
+              problem = "No 'Send emails daily' run was created today (schedule likely disabled on the fork)."
+          elif all(r["conclusion"] in ("failure", "cancelled", "timed_out") for r in todays):
+              problem = "Today's 'Send emails daily' run(s) did not succeed."
+
+          if problem is None:
+              print(f"OK: {len(todays)} run(s) today, latest={todays[0]['conclusion'] if todays else 'n/a'}")
+              raise SystemExit(0)
+
+          print(problem)
+          run_url = todays[0]["html_url"] if todays else f"https://github.com/{repo}/actions/workflows/main.yml"
+          from email.mime.text import MIMEText
+          import smtplib, ssl
+          msg = MIMEText(f"{problem}\n\nRun: {run_url}")
+          msg["Subject"] = "[zotero-arxiv-daily] daily schedule missed or failed"
+          msg["From"] = os.environ["SENDER"]
+          msg["To"] = os.environ["RECEIVER"]
+          ctx = ssl.create_default_context()
+          with smtplib.SMTP_SSL(os.environ["SMTP_SERVER"], int(os.environ["SMTP_PORT"]), context=ctx) as s:
+              s.login(os.environ["SENDER"], os.environ["SENDER_PASSWORD"])
+              s.send_message(msg)
+          print("Watchdog alert sent to", os.environ["RECEIVER"])
+          raise SystemExit(1)
+          EOF

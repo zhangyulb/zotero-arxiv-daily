@@ -4,9 +4,14 @@ on:
   schedule:
     - cron: '0 22 * * *'
 
+concurrency:
+  group: send-emails-daily
+  cancel-in-progress: false
+
 jobs:
   calculate-and-send:
     runs-on: ubuntu-latest
+    timeout-minutes: 150
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,3 +37,31 @@ jobs:
           echo "Use custom config: "
           cat config/custom.yaml
           uv run src/zotero_arxiv_daily/main.py
+
+      - name: Report failure
+        if: failure() || timeout() || cancelled()
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SENDER: ${{ secrets.SENDER }}
+          RECEIVER: ${{ secrets.RECEIVER }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import os, smtplib, ssl
+          from email.mime.text import MIMEText
+
+          run_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          reason = os.environ.get("FAILURE_REASON", "unknown")
+          body = f"The 'Send emails daily' workflow run did not complete ({reason}).\n\nRun: {run_url}"
+          msg = MIMEText(body)
+          msg["Subject"] = "[zotero-arxiv-daily] daily run did not complete"
+          msg["From"] = os.environ["SENDER"]
+          msg["To"] = os.environ["RECEIVER"]
+          ctx = ssl.create_default_context()
+          with smtplib.SMTP_SSL(os.environ["SMTP_SERVER"], int(os.environ["SMTP_PORT"]), context=ctx) as s:
+              s.login(os.environ["SENDER"], os.environ["SENDER_PASSWORD"])
+              s.send_message(msg)
+          print("Failure notification sent to", os.environ["RECEIVER"])
+          EOF
