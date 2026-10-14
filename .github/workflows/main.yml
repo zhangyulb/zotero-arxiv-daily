@@ -39,7 +39,7 @@ jobs:
           uv run src/zotero_arxiv_daily/main.py
 
       - name: Report failure
-        if: failure() || timeout() || cancelled()
+        if: failure() || cancelled()
         env:
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

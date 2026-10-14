@@ -16,6 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Lint workflows
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
       - name: Setup uv
         uses: astral-sh/setup-uv@v7.1.4
 

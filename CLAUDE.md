@@ -71,11 +71,23 @@ uv run pytest --cov=src/zotero_arxiv_daily --cov-report=term-missing
 
 Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
 
-Available skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`.
-
-If gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
+Other gstack skills are available (ship, review, qa, investigate, etc.); check the gstack skill registry to list them. If gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
 
 ## Git Workflow
 
 - PRs should target the `dev` branch, not `main`
 - Current development branch: `dev`
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on this repo (`gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
