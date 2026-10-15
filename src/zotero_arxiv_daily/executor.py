@@ -63,6 +63,8 @@ class Executor:
                     if "siliconflow" in base_url_str.lower()
                     else "gpt-4o-mini"
                 )
+            if "siliconflow" in base_url_str.lower() and gen_kwargs.get("max_tokens", 0) > 4096:
+                gen_kwargs["max_tokens"] = 4096
         if not config.llm.get("language"):
             config.llm["language"] = "English"
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
