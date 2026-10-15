@@ -2,10 +2,10 @@ name: Schedule watchdog
 on:
   workflow_dispatch:
   schedule:
-    # Runs 2h after the daily cron (0 22 * * *). If the day's run is missing
-    # (GitHub silently disables scheduled workflows on inactive forks),
-    # this fails loudly and emails the receiver.
-    - cron: '0 0 * * *'
+    # Runs 5h after the daily cron (0 22 * * *), safely after the 150m job timeout
+    # and typical GitHub Actions schedule queue delays. If the last 24h run is missing
+    # or failed, this fails loudly and emails the receiver.
+    - cron: '0 3 * * *'
 
 jobs:
   check-daily-run:
@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'EOF'
-          import json, os, urllib.request
+          import datetime, json, os, urllib.request
 
           repo = os.environ["GITHUB_REPOSITORY"]
           req = urllib.request.Request(
@@ -35,22 +35,29 @@ jobs:
           with urllib.request.urlopen(req) as resp:
               runs = json.load(resp)["workflow_runs"]
 
-          import datetime
-          today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-          todays = [r for r in runs if r["created_at"].startswith(today)]
+          now = datetime.datetime.now(datetime.timezone.utc)
+          cutoff = now - datetime.timedelta(hours=24)
+          recent = [
+              r for r in runs
+              if datetime.datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")) >= cutoff
+          ]
 
           problem = None
-          if not todays:
-              problem = "No 'Send emails daily' run was created today (schedule likely disabled on the fork)."
-          elif all(r["conclusion"] in ("failure", "cancelled", "timed_out") for r in todays):
-              problem = "Today's 'Send emails daily' run(s) did not succeed."
+          if not recent:
+              problem = "No 'Send emails daily' run was created in the last 24 hours (schedule likely disabled on the fork)."
+          elif all(
+              r.get("status") == "completed" and r.get("conclusion") in ("failure", "cancelled", "timed_out")
+              for r in recent
+          ):
+              problem = "Recent 'Send emails daily' run(s) in the last 24 hours did not succeed."
 
           if problem is None:
-              print(f"OK: {len(todays)} run(s) today, latest={todays[0]['conclusion'] if todays else 'n/a'}")
+              latest = recent[0].get("conclusion") or recent[0].get("status")
+              print(f"OK: {len(recent)} run(s) in last 24h, latest={latest}")
               raise SystemExit(0)
 
           print(problem)
-          run_url = todays[0]["html_url"] if todays else f"https://github.com/{repo}/actions/workflows/main.yml"
+          run_url = recent[0]["html_url"] if recent else f"https://github.com/{repo}/actions/workflows/main.yml"
           from email.mime.text import MIMEText
           import smtplib, ssl
           msg = MIMEText(f"{problem}\n\nRun: {run_url}")
@@ -58,9 +65,30 @@ jobs:
           msg["From"] = os.environ["SENDER"]
           msg["To"] = os.environ["RECEIVER"]
           ctx = ssl.create_default_context()
-          with smtplib.SMTP_SSL(os.environ["SMTP_SERVER"], int(os.environ["SMTP_PORT"]), context=ctx) as s:
+          host = os.environ["SMTP_SERVER"]
+          port = int(os.environ["SMTP_PORT"])
+          s = None
+          try:
+              s = smtplib.SMTP(host, port, timeout=30)
+              s.starttls(context=ctx)
+          except Exception:
+              if s is not None:
+                  try:
+                      s.close()
+                  except Exception:
+                      pass
+              try:
+                  s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
+              except Exception:
+                  s = smtplib.SMTP(host, port, timeout=30)
+          try:
               s.login(os.environ["SENDER"], os.environ["SENDER_PASSWORD"])
               s.send_message(msg)
+          finally:
+              try:
+                  s.quit()
+              except Exception:
+                  pass
           print("Watchdog alert sent to", os.environ["RECEIVER"])
           raise SystemExit(1)
           EOF

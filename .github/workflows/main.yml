@@ -31,6 +31,9 @@ jobs:
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
+          MODEL_NAME: ${{ secrets.MODEL_NAME }}
+          LLM_USER_AGENT: ${{ secrets.LLM_USER_AGENT }}
+          LANGUAGE: ${{ vars.LANGUAGE }}
           CUSTOM_CONFIG: ${{ vars.CUSTOM_CONFIG }}
         run: |
           printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
@@ -60,8 +63,29 @@ jobs:
           msg["From"] = os.environ["SENDER"]
           msg["To"] = os.environ["RECEIVER"]
           ctx = ssl.create_default_context()
-          with smtplib.SMTP_SSL(os.environ["SMTP_SERVER"], int(os.environ["SMTP_PORT"]), context=ctx) as s:
+          host = os.environ["SMTP_SERVER"]
+          port = int(os.environ["SMTP_PORT"])
+          s = None
+          try:
+              s = smtplib.SMTP(host, port, timeout=30)
+              s.starttls(context=ctx)
+          except Exception:
+              if s is not None:
+                  try:
+                      s.close()
+                  except Exception:
+                      pass
+              try:
+                  s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
+              except Exception:
+                  s = smtplib.SMTP(host, port, timeout=30)
+          try:
               s.login(os.environ["SENDER"], os.environ["SENDER_PASSWORD"])
               s.send_message(msg)
+          finally:
+              try:
+                  s.quit()
+              except Exception:
+                  pass
           print("Failure notification sent to", os.environ["RECEIVER"])
           EOF

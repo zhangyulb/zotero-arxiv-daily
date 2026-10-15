@@ -20,6 +20,9 @@ class LocalReranker(BaseReranker):
             warnings.filterwarnings("ignore", category=FutureWarning)
 
         encoder = SentenceTransformer(self.config.reranker.local.model, trust_remote_code=True)
+        if getattr(getattr(encoder, "device", None), "type", None) == "cpu":
+            import torch
+            encoder = encoder.to(torch.float32)
         if self.config.reranker.local.encode_kwargs:
             encode_kwargs = self.config.reranker.local.encode_kwargs
         else:

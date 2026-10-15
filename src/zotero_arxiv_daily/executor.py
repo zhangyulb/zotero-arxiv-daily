@@ -38,7 +38,33 @@ class Executor:
             source: get_retriever_cls(source)(config) for source in config.executor.source
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
-        self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+        openai_client_kwargs = {
+            "api_key": config.llm.api.key,
+            "base_url": config.llm.api.base_url,
+        }
+        user_agent = config.llm.api.get("user_agent")
+        if user_agent is not None and not isinstance(user_agent, str):
+            raise TypeError("config.llm.api.user_agent must be a string or null.")
+        if user_agent:
+            openai_client_kwargs["default_headers"] = {"User-Agent": user_agent}
+        self.openai_client = OpenAI(**openai_client_kwargs)
+        import os
+        base_url_str = str(config.llm.api.get("base_url") or "")
+        gen_kwargs = config.llm.get("generation_kwargs")
+        if gen_kwargs is not None:
+            current_model = gen_kwargs.get("model")
+            if not current_model or (
+                current_model == "gpt-4o-mini"
+                and "siliconflow" in base_url_str.lower()
+                and not os.environ.get("MODEL_NAME")
+            ):
+                gen_kwargs["model"] = (
+                    "Qwen/Qwen2.5-7B-Instruct"
+                    if "siliconflow" in base_url_str.lower()
+                    else "gpt-4o-mini"
+                )
+        if not config.llm.get("language"):
+            config.llm["language"] = "English"
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)

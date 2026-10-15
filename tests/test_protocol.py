@@ -8,6 +8,7 @@ from tests.canned_responses import make_sample_paper, make_stub_openai_client
 @pytest.fixture()
 def llm_params():
     return {
+        "api_mode": "chat_completion",
         "language": "English",
         "generation_kwargs": {"model": "gpt-4o-mini", "max_tokens": 16384},
     }
@@ -18,7 +19,9 @@ def llm_params():
 # ---------------------------------------------------------------------------
 
 
-def test_tldr_returns_response(llm_params):
+@pytest.mark.parametrize("api_mode", ["chat_completion", "response"])
+def test_tldr_returns_response(llm_params, api_mode):
+    llm_params["api_mode"] = api_mode
     client = make_stub_openai_client()
     paper = make_sample_paper()
     result = paper.generate_tldr(client, llm_params)
@@ -33,7 +36,9 @@ def test_tldr_without_abstract_or_fulltext(llm_params):
     assert "Failed to generate TLDR" in result
 
 
-def test_tldr_falls_back_to_abstract_on_error(llm_params):
+def test_tldr_falls_back_to_abstract_on_error(llm_params, monkeypatch):
+    import time
+    monkeypatch.setattr(time, "sleep", lambda _: None)
     paper = make_sample_paper()
 
     # Client whose create() raises
@@ -55,12 +60,72 @@ def test_tldr_truncates_long_prompt(llm_params):
     assert result is not None
 
 
+def test_response_mode_maps_max_tokens(llm_params):
+    from types import SimpleNamespace
+
+    received_kwargs = {}
+
+    def create_response(**kwargs):
+        received_kwargs.update(kwargs)
+        return SimpleNamespace(output_text="Summary")
+
+    client = SimpleNamespace(
+        responses=SimpleNamespace(create=create_response),
+    )
+    llm_params["api_mode"] = "response"
+    paper = make_sample_paper()
+
+    assert paper.generate_tldr(client, llm_params) == "Summary"
+    assert received_kwargs["max_output_tokens"] == 16384
+    assert "max_tokens" not in received_kwargs
+
+
+def test_invalid_api_mode_falls_back_to_abstract(llm_params):
+    llm_params["api_mode"] = "invalid"
+    paper = make_sample_paper()
+
+    assert paper.generate_tldr(make_stub_openai_client(), llm_params) == paper.abstract
+
+
+def test_tldr_does_not_retry_permission_denied_403(llm_params):
+    from types import SimpleNamespace
+    import httpx
+    import openai
+
+    calls = []
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(
+        403,
+        request=req,
+        json={"data": None, "message": "Access denied: please complete identity verification before trying again."},
+    )
+
+    def create_403(**kwargs):
+        calls.append(kwargs)
+        raise openai.PermissionDeniedError(
+            "Error code: 403",
+            response=resp,
+            body={"data": None, "message": "Access denied: please complete identity verification before trying again."},
+        )
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create_403))
+    )
+    paper = make_sample_paper()
+    result = paper.generate_tldr(client, llm_params)
+    assert result == paper.abstract
+    assert paper.has_failures is True
+    assert len(calls) == 1
+
+
 # ---------------------------------------------------------------------------
 # generate_affiliations
 # ---------------------------------------------------------------------------
 
 
-def test_affiliations_returns_parsed_list(llm_params):
+@pytest.mark.parametrize("api_mode", ["chat_completion", "response"])
+def test_affiliations_returns_parsed_list(llm_params, api_mode):
+    llm_params["api_mode"] = api_mode
     client = make_stub_openai_client()
     paper = make_sample_paper()
     result = paper.generate_affiliations(client, llm_params)
@@ -86,9 +151,12 @@ def test_affiliations_deduplicates(llm_params):
     assert len(result) == len(set(result))
 
 
-def test_affiliations_malformed_llm_output(llm_params):
+def test_affiliations_malformed_llm_output(llm_params, monkeypatch):
     """LLM returns affiliations without JSON brackets. Should fall back gracefully."""
+    import time
     from types import SimpleNamespace
+
+    monkeypatch.setattr(time, "sleep", lambda _: None)
 
     def create_no_brackets(**kwargs):
         return SimpleNamespace(
@@ -110,8 +178,11 @@ def test_affiliations_malformed_llm_output(llm_params):
     assert result is None
 
 
-def test_affiliations_error_returns_none(llm_params):
+def test_affiliations_error_returns_none(llm_params, monkeypatch):
+    import time
     from types import SimpleNamespace
+
+    monkeypatch.setattr(time, "sleep", lambda _: None)
 
     broken_client = SimpleNamespace(
         chat=SimpleNamespace(
@@ -122,6 +193,37 @@ def test_affiliations_error_returns_none(llm_params):
     result = paper.generate_affiliations(broken_client, llm_params)
     assert result is None
     assert paper.affiliations is None
+
+
+def test_affiliations_do_not_retry_permission_denied_403(llm_params):
+    from types import SimpleNamespace
+    import httpx
+    import openai
+
+    calls = []
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(
+        403,
+        request=req,
+        json={"data": None, "message": "Access denied: please complete identity verification before trying again."},
+    )
+
+    def create_403(**kwargs):
+        calls.append(kwargs)
+        raise openai.PermissionDeniedError(
+            "Error code: 403",
+            response=resp,
+            body={"data": None, "message": "Access denied: please complete identity verification before trying again."},
+        )
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create_403))
+    )
+    paper = make_sample_paper()
+    result = paper.generate_affiliations(client, llm_params)
+    assert result is None
+    assert paper.has_failures is True
+    assert len(calls) == 1
 
 def test_paper_tldr_failure_degrades_gracefully(monkeypatch):
     from zotero_arxiv_daily.protocol import Paper

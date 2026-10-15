@@ -227,6 +227,81 @@ def test_extract_tex_with_input_resolution(make_tar):
     assert "This is the introduction." in result["all"]
 
 
+@pytest.mark.parametrize("command", ["input", "include"])
+@pytest.mark.parametrize("target", ["intro", "intro.tex"])
+def test_extract_tex_subfile_commands(make_tar, command, target):
+    path = make_tar({
+        "main.tex": f"\\begin{{document}}\n\\{command}{{{target}}}\n\\end{{document}}",
+        "main.bbl": "",
+        "intro.tex": "This is the introduction.",
+    })
+    result = extract_tex_code_from_tar(path, "test-paper")
+    assert "This is the introduction." in result["all"]
+    assert f"\\{command}{{{target}}}" not in result["all"]
+
+
+def test_extract_tex_mixed_input_and_include(make_tar):
+    path = make_tar({
+        "main.tex": "\\begin{document}\n\\input{intro}\n\\include{method}\n\\end{document}",
+        "main.bbl": "",
+        "intro.tex": "Introduction text.",
+        "method.tex": "Method text.",
+    })
+    result = extract_tex_code_from_tar(path, "test-paper")
+    assert "Introduction text." in result["all"]
+    assert "Method text." in result["all"]
+    assert result["all"].index("Introduction text.") < result["all"].index("Method text.")
+    assert "\\input{" not in result["all"]
+    assert "\\include{" not in result["all"]
+
+
+def test_extract_tex_repeated_include(make_tar):
+    path = make_tar({
+        "main.tex": "\\begin{document}\n\\include{intro}\n\\include{intro}\n\\end{document}",
+        "main.bbl": "",
+        "intro.tex": "Introduction text.",
+    })
+    result = extract_tex_code_from_tar(path, "test-paper")
+    assert result["all"].count("Introduction text.") == 2
+    assert "\\include{" not in result["all"]
+
+
+@pytest.mark.parametrize("command", ["input", "include"])
+def test_extract_tex_missing_subfile(make_tar, command):
+    path = make_tar({
+        "main.tex": f"\\begin{{document}}\nBefore\\{command}{{missing}}After\n\\end{{document}}",
+        "main.bbl": "",
+    })
+    result = extract_tex_code_from_tar(path, "test-paper")
+    assert "BeforeAfter" in result["all"]
+    assert f"\\{command}{{missing}}" not in result["all"]
+
+
+def test_workflows_use_starttls_fallback_and_24h_watchdog_window(monkeypatch):
+    """Regression test for run 38674781835: workflow alert emails must use STARTTLS fallback
+    (not bare SMTP_SSL) and watchdog must check a 24h window across the UTC midnight boundary.
+    """
+    from pathlib import Path
+    import ssl
+    import yaml
+
+    repo_root = Path(__file__).resolve().parent.parent
+    main_wf = yaml.safe_load((repo_root / ".github/workflows/main.yml").read_text())
+    watchdog_wf = yaml.safe_load((repo_root / ".github/workflows/watchdog.yml").read_text())
+
+    report_script = main_wf["jobs"]["calculate-and-send"]["steps"][-1]["run"]
+    watchdog_script = watchdog_wf["jobs"]["check-daily-run"]["steps"][0]["run"]
+
+    # Both scripts must try STARTTLS before falling back to SMTP_SSL
+    assert "starttls" in report_script
+    assert "starttls" in watchdog_script
+
+    # Watchdog must not filter by startswith(today) which misses 22:00 UTC runs at 00:00+ UTC
+    assert 'startswith(today)' not in watchdog_script
+    assert "timedelta(hours=24)" in watchdog_script
+
+
+
 def test_extract_tex_no_tex_files(make_tar):
     path = make_tar({"readme.md": "# Hello"})
     result = extract_tex_code_from_tar(path, "test-paper")
