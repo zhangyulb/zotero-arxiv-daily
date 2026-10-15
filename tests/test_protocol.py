@@ -195,6 +195,23 @@ def test_affiliations_error_returns_none(llm_params, monkeypatch):
     assert paper.affiliations is None
 
 
+def test_affiliations_parses_single_quoted_python_list(llm_params):
+    from types import SimpleNamespace
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kw: SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content="['MIT', 'Stanford University']"))]
+                )
+            )
+        )
+    )
+    paper = make_sample_paper()
+    result = paper.generate_affiliations(client, llm_params)
+    assert set(result) == {"MIT", "Stanford University"}
+
+
 def test_affiliations_do_not_retry_permission_denied_403(llm_params):
     from types import SimpleNamespace
     import httpx

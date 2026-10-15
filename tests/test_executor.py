@@ -54,8 +54,9 @@ def test_executor_defaults_siliconflow_model_when_unset(config, monkeypatch):
         config.llm.language = ""
 
     executor = Executor(config)
-    assert executor.config.llm.generation_kwargs.model == "Qwen/Qwen2.5-7B-Instruct"
+    assert executor.config.llm.generation_kwargs.model == "Qwen/Qwen3-8B"
     assert executor.config.llm.generation_kwargs.max_tokens == 4096
+    assert executor.config.llm.generation_kwargs.extra_body == {"enable_thinking": False}
     assert executor.config.llm.language == "English"
 
 

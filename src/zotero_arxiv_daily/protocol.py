@@ -142,8 +142,15 @@ class Paper:
             match = re.search(r'\[.*?\]', affiliations, flags=re.DOTALL)
             if match is None:
                 raise AttributeError("No list found in LLM output")
-            affiliations = match.group(0)
-            affiliations = json.loads(affiliations)
+            affiliations_str = match.group(0)
+            try:
+                affiliations = json.loads(affiliations_str)
+            except json.JSONDecodeError:
+                import ast
+                parsed = ast.literal_eval(affiliations_str)
+                if not isinstance(parsed, list):
+                    raise
+                affiliations = parsed
             affiliations = list(set(affiliations))
             affiliations = [str(a) for a in affiliations]
 

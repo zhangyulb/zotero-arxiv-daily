@@ -1,6 +1,6 @@
 from loguru import logger
 from pyzotero import zotero
-from omegaconf import DictConfig, ListConfig
+from omegaconf import DictConfig, ListConfig, open_dict
 from .utils import glob_match
 from .retriever import get_retriever_cls
 from .protocol import CorpusPaper
@@ -59,12 +59,19 @@ class Executor:
                 and not os.environ.get("MODEL_NAME")
             ):
                 gen_kwargs["model"] = (
-                    "Qwen/Qwen2.5-7B-Instruct"
+                    "Qwen/Qwen3-8B"
                     if "siliconflow" in base_url_str.lower()
                     else "gpt-4o-mini"
                 )
-            if "siliconflow" in base_url_str.lower() and gen_kwargs.get("max_tokens", 0) > 4096:
-                gen_kwargs["max_tokens"] = 4096
+            if "siliconflow" in base_url_str.lower():
+                if gen_kwargs.get("max_tokens", 0) > 4096:
+                    gen_kwargs["max_tokens"] = 4096
+                if "qwen3" in str(gen_kwargs.get("model", "")).lower() and "extra_body" not in gen_kwargs:
+                    if isinstance(gen_kwargs, DictConfig):
+                        with open_dict(gen_kwargs):
+                            gen_kwargs["extra_body"] = {"enable_thinking": False}
+                    else:
+                        gen_kwargs["extra_body"] = {"enable_thinking": False}
         if not config.llm.get("language"):
             config.llm["language"] = "English"
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
