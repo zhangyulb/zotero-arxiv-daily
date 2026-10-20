@@ -158,8 +158,6 @@ def test_send_email_falls_back_to_plain(config, monkeypatch):
     sent = []
     call_count = {"smtp": 0}
 
-    StubOK = make_stub_smtp(sent)
-
     class StubSMTP_TLS_Fails:
         def __init__(self, *a, **kw):
             call_count["smtp"] += 1
@@ -277,12 +275,9 @@ def test_extract_tex_missing_subfile(make_tar, command):
     assert f"\\{command}{{missing}}" not in result["all"]
 
 
-def test_workflows_use_starttls_fallback_and_24h_watchdog_window(monkeypatch):
-    """Regression test for run 38674781835: workflow alert emails must use STARTTLS fallback
-    (not bare SMTP_SSL) and watchdog must check a 24h window across the UTC midnight boundary.
-    """
+def test_workflows_use_tested_watchdog_module():
+    """Workflows delegate failure reporting and schedule watchdog checks to zotero_arxiv_daily.watchdog."""
     from pathlib import Path
-    import ssl
     import yaml
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -290,15 +285,10 @@ def test_workflows_use_starttls_fallback_and_24h_watchdog_window(monkeypatch):
     watchdog_wf = yaml.safe_load((repo_root / ".github/workflows/watchdog.yml").read_text())
 
     report_script = main_wf["jobs"]["calculate-and-send"]["steps"][-1]["run"]
-    watchdog_script = watchdog_wf["jobs"]["check-daily-run"]["steps"][0]["run"]
+    watchdog_script = watchdog_wf["jobs"]["check-daily-run"]["steps"][-1]["run"]
 
-    # Both scripts must try STARTTLS before falling back to SMTP_SSL
-    assert "starttls" in report_script
-    assert "starttls" in watchdog_script
-
-    # Watchdog must not filter by startswith(today) which misses 22:00 UTC runs at 00:00+ UTC
-    assert 'startswith(today)' not in watchdog_script
-    assert "timedelta(hours=24)" in watchdog_script
+    assert "zotero_arxiv_daily.watchdog report-failure" in report_script
+    assert "zotero_arxiv_daily.watchdog check" in watchdog_script
 
 
 

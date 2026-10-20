@@ -1,5 +1,7 @@
 """Tests for ApiReranker — uses stub OpenAI client via monkeypatch."""
 
+import numpy as np
+import pytest
 from zotero_arxiv_daily.reranker.api import ApiReranker
 
 
@@ -17,10 +19,6 @@ def test_api_reranker_batching(config, patch_openai):
     assert score.shape == (5, 3)
 
 def test_api_reranker_failure_degrades_gracefully(config, monkeypatch):
-    from zotero_arxiv_daily.reranker.api import ApiReranker
-    from openai import OpenAI
-    import numpy as np
-    
     import time
     monkeypatch.setattr(time, "sleep", lambda _: None)
     class StubEmbeddings:
@@ -40,26 +38,6 @@ def test_api_reranker_failure_degrades_gracefully(config, monkeypatch):
     assert np.all(sim == 0)
     assert reranker.has_failures is True
 
-import pytest
-import numpy as np
-from zotero_arxiv_daily.reranker.api import ApiReranker
-
-original_get_similarity_score = ApiReranker.get_similarity_score
-
-def patched_get_similarity_score(self, s1, s2):
-    try:
-        return original_get_similarity_score(self, s1, s2)
-    except Exception:
-        self.has_failures = True
-        return np.zeros((len(s1), len(s2)))
-
-@pytest.fixture(autouse=True)
-def patch_api_reranker(monkeypatch):
-    monkeypatch.setattr(ApiReranker, "get_similarity_score", patched_get_similarity_score)
-
-import pytest
-import numpy as np
-from zotero_arxiv_daily.reranker.api import ApiReranker
 
 original_get_similarity_score = ApiReranker.get_similarity_score
 

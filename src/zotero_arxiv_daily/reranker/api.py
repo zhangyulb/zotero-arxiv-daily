@@ -25,7 +25,7 @@ class ApiReranker(BaseReranker):
             try:
                 embeddings = self._fetch_embeddings_batch(client, batch)
                 all_embeddings.append(embeddings)
-            except Exception as e:
+            except Exception:
                 self.has_failures = True
                 all_embeddings.append(None)
                 

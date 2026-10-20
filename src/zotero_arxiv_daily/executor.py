@@ -1,7 +1,7 @@
 from loguru import logger
 from pyzotero import zotero
 from omegaconf import DictConfig, ListConfig, open_dict
-from .utils import glob_match
+from .utils import glob_match, normalize_bool
 from .retriever import get_retriever_cls
 from .protocol import CorpusPaper
 import random
@@ -32,6 +32,8 @@ def normalize_path_patterns(patterns: list[str] | ListConfig | None, config_key:
 class Executor:
     def __init__(self, config:DictConfig):
         self.config = config
+        if hasattr(config, "executor") and hasattr(config.executor, "debug"):
+            config.executor.debug = normalize_bool(config.executor.debug, default=False)
         self.include_path_patterns = normalize_path_patterns(config.zotero.include_path, "include_path")
         self.ignore_path_patterns = normalize_path_patterns(config.zotero.ignore_path, "ignore_path")
         self.retrievers = {

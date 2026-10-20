@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
 from omegaconf import DictConfig
 from ..protocol import Paper, CorpusPaper
+from ..utils import normalize_bool
 import numpy as np
 from typing import Type
 class BaseReranker(ABC):
     has_failures: bool = False
     def __init__(self, config:DictConfig):
+        if hasattr(config, "executor") and hasattr(config.executor, "debug"):
+            config.executor.debug = normalize_bool(config.executor.debug, default=False)
         self.config = config
 
     def rerank(self, candidates:list[Paper], corpus:list[CorpusPaper]) -> list[Paper]:

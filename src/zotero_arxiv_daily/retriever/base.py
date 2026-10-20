@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from omegaconf import DictConfig
 from ..protocol import Paper, RawPaperItem
+from ..utils import normalize_bool
 from tqdm import tqdm
 from typing import Type
 from time import sleep
@@ -11,6 +12,8 @@ class BaseRetriever(ABC):
     name: str
     has_failures: bool = False
     def __init__(self, config:DictConfig):
+        if hasattr(config, "executor") and hasattr(config.executor, "debug"):
+            config.executor.debug = normalize_bool(config.executor.debug, default=False)
         self.config = config
         self.retriever_config = getattr(config.source,self.name)
 

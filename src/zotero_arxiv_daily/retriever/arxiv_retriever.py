@@ -1,5 +1,5 @@
 from .base import BaseRetriever, register_retriever
-import arxiv
+import arxiv  # noqa: F401
 from arxiv import Result as ArxivResult
 from ..protocol import Paper
 from ..utils import extract_markdown_from_pdf, extract_tex_code_from_tar
@@ -7,7 +7,6 @@ import calendar
 from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 import feedparser
-from tqdm import tqdm
 import multiprocessing
 import os
 from queue import Empty

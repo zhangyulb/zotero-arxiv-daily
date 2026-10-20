@@ -37,7 +37,8 @@ def _bm25_pick(query: str, candidates: dict[str, str], k1: float = 1.5, b: float
     for tokens in doc_tokens.values():
         df.update(set(tokens))
 
-    best_name, best_score = None, -1.0
+    best_name: str = next(iter(candidates))
+    best_score = -1.0
     for name, tokens in doc_tokens.items():
         tf = Counter(tokens)
         dl = len(tokens)
@@ -53,7 +54,7 @@ def _bm25_pick(query: str, candidates: dict[str, str], k1: float = 1.5, b: float
     return best_name
 
 
-def extract_tex_code_from_tar(file_path:str, paper_id:str, paper_title:str | None = None) -> dict[str,str]:
+def extract_tex_code_from_tar(file_path:str, paper_id:str, paper_title:str | None = None) -> dict[str, str | None] | None:
     try:
         tar = tarfile.open(file_path)
     except tarfile.ReadError:
@@ -91,6 +92,8 @@ def extract_tex_code_from_tar(file_path:str, paper_id:str, paper_title:str | Non
     doc_block_candidates: list[str] = []
     for t in tex_files:
         f = tar.extractfile(t)
+        if f is None:
+            continue
         content = f.read().decode('utf-8',errors='ignore')
         content = re.sub(r'%.*\n', '\n', content)
         content = re.sub(r'\\begin{comment}.*?\\end{comment}', '', content, flags=re.DOTALL)
@@ -134,11 +137,28 @@ def extract_tex_code_from_tar(file_path:str, paper_id:str, paper_title:str | Non
     return file_contents
 
 def extract_markdown_from_pdf(file_path:str) -> str:
-    return pymupdf4llm.to_markdown(file_path,use_ocr=False,header=False,footer=False,ignore_code=True)
+    md = pymupdf4llm.to_markdown(file_path,use_ocr=False,header=False,footer=False,ignore_code=True)
+    return md if isinstance(md, str) else "\n".join(str(chunk) for chunk in md)
 
 def glob_match(path:str, pattern:str) -> bool:
     re_pattern = glob.translate(pattern,recursive=True)
     return re.match(re_pattern, path) is not None
+
+
+def normalize_bool(value: object, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        stripped = value.strip().lower()
+        if stripped in ("", "false", "0", "no", "off", "null", "none"):
+            return False
+        if stripped in ("true", "1", "yes", "on"):
+            return True
+    return bool(value)
 
 def send_email(config:DictConfig, html:str):
     sender = config.email.sender

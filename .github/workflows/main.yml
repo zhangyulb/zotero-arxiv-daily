@@ -51,41 +51,4 @@ jobs:
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 - <<'EOF'
-          import os, smtplib, ssl
-          from email.mime.text import MIMEText
-
-          run_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          reason = os.environ.get("FAILURE_REASON", "unknown")
-          body = f"The 'Send emails daily' workflow run did not complete ({reason}).\n\nRun: {run_url}"
-          msg = MIMEText(body)
-          msg["Subject"] = "[zotero-arxiv-daily] daily run did not complete"
-          msg["From"] = os.environ["SENDER"]
-          msg["To"] = os.environ["RECEIVER"]
-          ctx = ssl.create_default_context()
-          host = os.environ["SMTP_SERVER"]
-          port = int(os.environ["SMTP_PORT"])
-          s = None
-          try:
-              s = smtplib.SMTP(host, port, timeout=30)
-              s.starttls(context=ctx)
-          except Exception:
-              if s is not None:
-                  try:
-                      s.close()
-                  except Exception:
-                      pass
-              try:
-                  s = smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
-              except Exception:
-                  s = smtplib.SMTP(host, port, timeout=30)
-          try:
-              s.login(os.environ["SENDER"], os.environ["SENDER_PASSWORD"])
-              s.send_message(msg)
-          finally:
-              try:
-                  s.quit()
-              except Exception:
-                  pass
-          print("Failure notification sent to", os.environ["RECEIVER"])
-          EOF
+          PYTHONPATH=src python3 -m zotero_arxiv_daily.watchdog report-failure
